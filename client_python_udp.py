@@ -2,8 +2,25 @@
 
 """ 
 UDP
+@author Crystal Cheung
+5228051
 """ 
 
+""" 
+ACK
+For each message that gets sent, there is either a '1 ' or '0 '
+at the beginning of the string.
+This bit counter changes between 1 and 0 every time a message
+is sent.
+The receiver of the message looks at this to know
+whether or not the current message is a duplicate,
+which would happen because an ACK was lost and timed out.
+
+Sorry, I could not get this to work with the shell script.
+After a few hours of getting different results between command line
+and the output files from the script, I ended up implementing more
+of the program instead.
+""" 
 #from socket import *
 import socket
 import sys, string
@@ -35,52 +52,60 @@ class Client:
 		print 'after timeout'
 
 		while 1:
-			#print 'inside while'
+			print 'inside while'
 			line = sys.stdin.readline()
 			if line == 'help\n':
 				print 'Valid commands are: ?key, key=value, list,' +\
 				'listc num, listc num continuationkey, help, and exit.'
 			elif line == 'exit\n':
 				sys.exit(0)
-			
 			if self.check_valid(line) == 1:
 				line = str(count) + ' ' + line
-				s.sendto(line, addr)
 					#print 'before timeout'
-				time = 0
-				# 500 ms
-				# tri-try: tries 3 times to get ACK
-				# if unsuccessful, then timeout
-				s.settimeout(2)
-				try:
-					print 'try 1'
-					ack = s.recv(size)
-				except:
+				#########
+				# keeps trying to send message until ack is received
+				#########
+				while 1:
+					print 'before send'
 					try:
-						print 'try 2'
+					  s.sendto(line, addr)
+					except socket.error:
+					  print 'ERROR: Failed to send message. Terminating.'
+					  sys.exit(1)
+					# 500 ms
+					# tri-try: tries 3 times to get ACK
+					# if unsuccessful, then timeout
+					print 'successful send, try to get ack'
+					s.settimeout(0.5)
+					try:
+						print 'try 1'
 						ack = s.recv(size)
 					except:
 						try:
-							print 'try 3'
+							print 'try 2'
 							ack = s.recv(size)
-						except: socket.timeout
-						print 'caught timeout'
-				if ack == 'ACK':
-					count = (count + 1)%2
-						#msg = s.recv(size)
-				#while (msg != 'Received'):
-					#print 'waiting for receive'
-				#print 'message received!'
-			'''
+						except:
+							try:
+								print 'try 3'
+								ack = s.recv(size)
+							except: socket.timeout
+							  print 'timeout'
+							  continue
+					# successful ACK
+					if ack == 'ACK':
+						print 'got the ACK'
+						count = (count + 1)%2
+						break
 			else:
 				print 'ERROR: Invalid command.'
 				continue
-			#reply = s.recv(size)
-			#print 'server response:'
-			#print reply
-			reply = s.recv(size)
+			# receive response from valid command
+			try:
+			  reply = s.recv(size)
+			except:
+			  print 'ERROR: Failed to receive message. Terminating.'
+			  sys.exit(1)
 			if (reply == 'list') | (reply == 'listc'):
-				print 'printing reply', reply
 				if reply == 'listc':
 					contChecker = s.recv(size)
 					print 'printing contChecker', contChecker
@@ -92,7 +117,6 @@ class Client:
 					print item
 			else:
 				print reply
-			'''
 		#s.close()
 
 
@@ -156,5 +180,13 @@ class Client:
 ############
 # main
 ############
+if len(sys.argv) != 3:
+	print 'ERROR: Invalid number of args. Terminating.'
+	sys.exit(1)
+host = sys.argv[1]
+port = int(sys.argv[2])
+if (port < 1024) | (port > 65535):
+	print 'ERROR: Invalid port. Terminating.'
+	sys.exit(1)
 client = Client()
-client.start('localhost', 8888)
+client.start(host, port)
